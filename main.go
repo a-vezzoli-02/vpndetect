@@ -42,6 +42,16 @@ func findVPN() VPN {
 		return out
 	}
 
+	out = findFortiVPN()
+	if out.Name != "" {
+		return out
+	}
+
+	out = findUniVPN()
+	if out.Name != "" {
+		return out
+	}
+
 	return VPN{}
 }
 
@@ -82,6 +92,73 @@ func findOpenVPN() VPN {
 	}
 }
 
+func findFortiVPN() VPN {
+	out := execIgnore("forticlient vpn status")
+
+	dataMap := make(map[string]string)
+	for _, line := range strings.Split(out, "\n") {
+		split := strings.Split(line, ":")
+		if len(split) < 2 {
+			continue
+		}
+		dataMap[strings.TrimSpace(split[0])] = strings.TrimSpace(split[1])
+	}
+
+	if dataMap["Status"] != "Connected" {
+		return VPN{}
+	}
+
+	name := dataMap["VPN name"]
+
+	return VPN{
+		Name:     name,
+		Provider: "FortiVPN",
+	}
+}
+
+const uniVPNLogPath = "~/UniVPN/log/"
+
+func findUniVPN() VPN {
+	out := findFirstProcess("univpn")
+	if out == "" {
+		return VPN{}
+	}
+
+	// files, err := os.ReadDir(uniVPNLogPath)
+	// if err != nil {
+	// 	return VPN{}
+	// }
+	//
+	// var lastFile os.DirEntry
+	// var lastFileModTime time.Time
+	// for _, file := range files {
+	// 	if file.Type().IsDir() {
+	// 		continue
+	// 	}
+	//
+	// 	fileInfo, err := file.Info()
+	// 	if err != nil {
+	// 		continue
+	// 	}
+	//
+	// 	if lastFile == nil || fileInfo.ModTime().After(lastFileModTime) {
+	// 		lastFile = file
+	// 		lastFileModTime = fileInfo.ModTime()
+	// 	}
+	// }
+	//
+	// if lastFile == nil {
+	// 	return VPN{}
+	// }
+	//
+	// file, err := os.Open(uniVPNLogPath + lastFile.Name())
+
+	return VPN{
+		Name:     "Unknown",
+		Provider: "UniVPN",
+	}
+}
+
 func findFirstProcess(name string) string {
 	out := findProcess(name)
 	if out == "" {
@@ -94,7 +171,7 @@ func findProcess(name string) string {
 	if name == "" {
 		return ""
 	}
-	return execIgnore("ps ax -o args | grep " + name + " | grep -v grep")
+	return execIgnore("ps ax -o args | grep -i " + name + " | grep -v grep")
 }
 
 func execIgnore(command string) string {
